@@ -1,91 +1,48 @@
-## Plugin Starter
+# Difference for Figma
 
-A starter template for building Figma plugins with **TypeScript**, **Astro**, and **Vite**. Contains everything you need to get started with a fully typed, modern plugin development setup.
+Pixel comparison of two frames, instantly. No UI.
 
-### Why Astro?
-
-I find [Astro](https://astro.build) a perfect tool for building simple web interfaces. Same vanila flavour + components. And you can also use React, Vue and Svelte components inside! 
-
-## **How to use**
-
-### Quick start
-
-1. Install [Node.js](https://nodejs.org/en/download)
-2. Clone / download the repo 
-3. Run `npm i` in terminal to install dependencies
-4. Run `npm run dev` to keep plugin updated on each change
-
-### Running plugin in Figma
-
-You need Figma desktop app to test local plugins.
-Go to Actions `⌘K` › Plugins & Widgets › Import from manifest (at the bottom).
-
-Open console (`⌘⌥I` › Console) to see logs and errors.
-
-### Remember to update
-
-There are some places where you'd want to fill in your plugin specific data like name and stuff:
-```
-assets/
-  ├── cover.png         # Add your icon
-  └── icon.png          # Add your cover
-src/
-  └── config.ts         # Edit messages
-readme.md               # Remove this guide and make a really cool description
-manifest.json           # Edit name, add generated ID on publish
-package.json            # Edit name, version, description, author, license
-```
-
-### Project structure
-
-```
-assets/
-  ├── cover.png         # Plugin cover (used in readme, you will need it on publish)
-  └── icon.png          # Plugin icon (used in readme, you will need it on publish)
-src/
-  ├── pages/            
-  │   └── index.astro   # Main plugin UI
-  ├── components/       # Reusable Astro components
-  ├── code.ts           # Main plugin logic
-  ├── config.ts         # Your config and constants
-  └── helpers/          # Shared helpers and utilities
-readme.md               # Description 
-manifest.json           # Plugin name and configuration
-package.json            # NPM package info
-
-```
-You probably won't need other files, it's mostly configuration files, demos and helpers. 
-
-
-### Development workflow
-- **`npm run dev`** - Watches `src/` and rebuilds `dist/` on changes
-- **`npm run build`** - Builds both plugin code and UI for production
-
----
-
-## **Template for your plugin readme**
-
-# Plugin name for Figma
-
-Plugin description
-
-![<Plugin name cover>](assets/cover.png)
+![Difference cover](assets/cover.png)
 
 ### How to use
 
-**Just run it** from the Quick Actions or Plugin menu. 
+Select **exactly two frames** and run the plugin from Quick Actions or the Plugins menu.
 
-Alternatively, select layers and the plugin will `<do this>`.
+A new `Comparison` frame appears 32px below the lowest of the two frames, selected and zoomed into view.
 
 ### How it works
 
-`<Explain the approach>`
-Plugin will do `<things>` with selected layers.
+Both frames are exported as 2x PNG snapshots, compared pixel by pixel, and the result is placed in one frame with three fills (top to bottom):
+
+| Fill | Opacity | Blend |
+| --- | --- | --- |
+| Overlay — changed pixels in red, unchanged ones transparent. Stronger changes are more opaque | 100% | Normal |
+| Second frame snapshot | 50% | Normal |
+| First frame snapshot | 100% | Normal |
+
+- **First / second** — the left frame is first (the top one if both share the same X).
+- **Different sizes** — snapshots are aligned to the top left corner. The comparison takes the larger width and height, and the empty area counts as changed.
+- **Even mix** — the first snapshot is at 100% and the second at 50% on top, which shows each at exactly half strength at full brightness. Two 50% fills would only reach 75% opacity, and the first would count for half as much as the second.
+- **Position** — the comparison is horizontally centered on the average of both frames' centers, with its top 32px below the bottom of the lower frame.
+- **Large frames** — Figma limits images to 4096px, so a frame over 2048px on either side is snapshotted at a lower scale. The notification tells you when that happens.
+- The notification shows how many pixels differ.
+
+Frames, components, component sets and instances can be compared.
+
+Settings (scale, overlay blend mode, snapshot opacities, gap) live in [src/config.ts](src/config.ts); the overlay color and alpha range are at the top of [src/pages/index.astro](src/pages/index.astro).
+
+### Development
+
+1. Run `npm i`
+2. Run `npm run dev` to rebuild `dist/` on every change, or `npm run build` once
+3. In the Figma desktop app: Actions `⌘K` › Plugins & Widgets › Import from manifest › pick `manifest.json`
+
+The plugin sandbox has no canvas, so PNG decoding, diffing and encoding run in a hidden UI iframe ([src/pages/index.astro](src/pages/index.astro)). [src/code.ts](src/code.ts) handles selection, export and the comparison frame.
 
 ### Feedback
 
 I accept feature suggestions and ideas to improve the plugin. If you have any ideas or issues, let me know in the comments.
 
-Or contact me via e-mail at [nick@qurle.net](mailto:nick@qurle.net?subject=<Plugin%20for%Figma>) or [Telegram](http://t.me/qurle).
+Or contact me via e-mail at [nick@qurle.net](mailto:nick@qurle.net?subject=Difference%20for%20Figma) or [Telegram](http://t.me/qurle).
 
 # <3

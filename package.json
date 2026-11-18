@@ -1,7 +1,7 @@
 {
-  "name": "plugin-name",
+  "name": "difference",
   "version": "1.0.0",
-  "description": "insert your description",
+  "description": "Pixel comparison of two Figma frames",
   "main": "/dist/code/code.js",
   "type": "module",
   "scripts": {

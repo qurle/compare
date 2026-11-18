@@ -1,52 +1,102 @@
----
-import Placeholder from '../components/Placeholder.astro'
----
-
 <!doctype html>
 <html lang="en">
-	<body>
-		<Placeholder id="placeholder">Start something new</Placeholder>
-	</body>
+	<body></body>
 </html>
-<script>
-	// Elements
-	const placeholderEl = document.querySelector('#placeholder')
 
-	// Handle messages from main code
+<!--
+	Hidden worker: the plugin sandbox has no canvas,
+	so PNG decoding, pixel diffing and encoding happen here.
+-->
+<script is:inline>
+	// Color of changed pixels in the overlay
+	const DIFF_COLOR = [255, 0, 64]
+	// Alpha range of changed pixels: faint changes get MIN, full changes get MAX
+	const MIN_ALPHA = 128
+	const MAX_ALPHA = 255
+
+	const send = (type, data) => parent.postMessage({ pluginMessage: { type, data } }, '*')
+
 	window.onmessage = async (event) => {
-		const type = event.data.pluginMessage.type
-		const data = event.data.pluginMessage.data
-		console.log(`Got ${type} message ↴`)
-		console.log(data)
-
-		switch (type) {
-			case 'selection':
-				const length = data.selection.length
-				placeholderEl.textContent = `Selected ${length} layer${length > 1 ? 's' : ''}`
-				break
+		const msg = event.data.pluginMessage
+		if (msg?.type !== 'compare') return
+		try {
+			send('result', await compare(msg.data.first, msg.data.second))
+		} catch (error) {
+			send('error', error?.message ?? String(error))
 		}
 	}
+
+	async function compare(firstBytes, secondBytes) {
+		const [first, second] = await Promise.all([decode(firstBytes), decode(secondBytes)])
+		const width = Math.max(first.width, second.width)
+		const height = Math.max(first.height, second.height)
+
+		// Both snapshots are aligned to the top left corner and padded to the same size
+		const a = draw(first, width, height)
+		const b = draw(second, width, height)
+		const pa = a.ctx.getImageData(0, 0, width, height).data
+		const pb = b.ctx.getImageData(0, 0, width, height).data
+
+		const overlay = createCanvas(width, height)
+		const diff = overlay.ctx.createImageData(width, height)
+		const po = diff.data
+		let changed = 0
+
+		for (let i = 0; i < pa.length; i += 4) {
+			const delta = Math.max(
+				Math.abs(pa[i] - pb[i]),
+				Math.abs(pa[i + 1] - pb[i + 1]),
+				Math.abs(pa[i + 2] - pb[i + 2]),
+				Math.abs(pa[i + 3] - pb[i + 3]),
+			)
+			if (delta === 0) continue
+			changed++
+			po[i] = DIFF_COLOR[0]
+			po[i + 1] = DIFF_COLOR[1]
+			po[i + 2] = DIFF_COLOR[2]
+			po[i + 3] = MIN_ALPHA + Math.round((delta / 255) * (MAX_ALPHA - MIN_ALPHA))
+		}
+		overlay.ctx.putImageData(diff, 0, 0)
+
+		return {
+			// Keep original bytes when no padding was needed to avoid re-encoding
+			first: sameSize(first, width, height) ? firstBytes : await encode(a.canvas),
+			second: sameSize(second, width, height) ? secondBytes : await encode(b.canvas),
+			overlay: await encode(overlay.canvas),
+			changed,
+			total: width * height,
+		}
+	}
+
+	function decode(bytes) {
+		return createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+	}
+
+	function createCanvas(width, height) {
+		const canvas = document.createElement('canvas')
+		canvas.width = width
+		canvas.height = height
+		return { canvas, ctx: canvas.getContext('2d', { willReadFrequently: true }) }
+	}
+
+	function draw(bitmap, width, height) {
+		const result = createCanvas(width, height)
+		result.ctx.drawImage(bitmap, 0, 0)
+		return result
+	}
+
+	function sameSize(bitmap, width, height) {
+		return bitmap.width === width && bitmap.height === height
+	}
+
+	function encode(canvas) {
+		return new Promise((resolve, reject) => {
+			canvas.toBlob(async (blob) => {
+				if (!blob) return reject(new Error('Could not encode PNG'))
+				resolve(new Uint8Array(await blob.arrayBuffer()))
+			}, 'image/png')
+		})
+	}
+
+	send('ready')
 </script>
-
-<style>
-	* {
-		margin: 0;
-		padding: 0;
-		box-sizing: border-box;
-	}
-
-	body {
-		height: 100%;
-		width: 100%;
-
-		font-family:
-			-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-			'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-			sans-serif;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		background: #f5f5f5;
-		padding: 16px;
-		color: #333;
-	}
-</style>
